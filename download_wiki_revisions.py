@@ -5,6 +5,7 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
+import os
 
 DATA_DIR = Path("data")
 
@@ -57,27 +58,42 @@ def find_yearmonth(revision: str) -> str:
     return extract_yearmonth(find_timestamp(revision))
 
 
-def main(page: str, limit: int, data_dir: Path):
+def main(page: str, limit: int, update: str, data_dir: Path):
     """
     Downloads the main page (with revisions) for the given page title.
     Organizes the revisions into a folder structure like
     <page_name>/<year>/<month>/<revision_id>.xml
     """
-    print(f"Downloading {limit} revisions of {page} to {data_dir}")
-    raw_revisions = download_page_w_revisions(page, limit=limit)
-    validate_page(page, page_xml=raw_revisions)
-    print("Downloaded revisions. Parsing and saving...")
-    for wiki_revision in tqdm(parse_mediawiki_revisions(raw_revisions), total=limit):
-        revision_path = construct_path(
-            wiki_revision=wiki_revision, page_name=page, save_dir=data_dir
-        )
-        if not revision_path.exists():
-            revision_path.parent.mkdir(parents=True, exist_ok=True)
-        revision_path.write_text(wiki_revision)
+
+
+    # Boolean wasn't working and being detected by the terminal.
+    if update=="True":
+        print(f"Downloading {limit} revisions of {page} to {data_dir}")
+        raw_revisions = download_page_w_revisions(page, limit=limit)
+        validate_page(page, page_xml=raw_revisions)
+        print("Downloaded revisions. Parsing and saving...")
+        for wiki_revision in tqdm(parse_mediawiki_revisions(raw_revisions), total=limit):
+            revision_path = construct_path(
+                wiki_revision=wiki_revision, page_name=page, save_dir=data_dir
+            )
+            if not revision_path.exists():
+                revision_path.parent.mkdir(parents=True, exist_ok=True)
+            revision_path.write_text(wiki_revision)
     
-    print("Done!") # You should call count_revisions() here and print the number of revisions
-                   # You should also pass an 'update' argument so that you can decide whether
-                   # to update and refresh or whether to simply count the revisions.   
+    number_of_revisions = count_files(page, folders=True)
+
+    print(f"The number of revisions are {number_of_revisions}")
+
+
+def count_files(page, folders=False):
+    folder = Path(f'data/{page}')
+    count = 0
+    for root_dir, cur_dir, files in os.walk(folder):
+        count += len(files)
+        if folders==True: 
+                count += len(cur_dir)  # Optionally count folders
+
+    return count
 
 
 def construct_path(page_name: str, save_dir: Path, wiki_revision: str) -> Path:
@@ -108,5 +124,10 @@ if __name__ == "__main__":
         default=10,
         help="Number of revisions to download",
     )
+    parser.add_argument(
+        "--update",
+        type=str,
+        help="Updating the revisions (re-downloading)",
+    )
     args = parser.parse_args()
-    main(page=args.page, limit=args.limit, data_dir=DATA_DIR)
+    main(page=args.page, limit=args.limit, update=args.update, data_dir=DATA_DIR)
